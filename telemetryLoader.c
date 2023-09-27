@@ -715,10 +715,12 @@ bool locateTPprogs(const ebpfTelemetryObject *obj)
                 programName[programNameLen - 1] = '0' + n;
                 if ((s->prog[n] = bpf_object__find_program_by_name(bpfObj, programName)) == NULL) {
                     fprintf(stderr, "ERROR: failed to find program: '%s' '%s'\n", programName, strerror(errno));
+                    free(programName);
                     return false;
                 }
                 bpf_program__set_type(s->prog[n], BPF_PROG_TYPE_TRACEPOINT);
             }
+            free(programName);
         } else {
             // attach this to specified enter tracepoint
             if ((s->prog[0] = bpf_object__find_program_by_name(bpfObj, p->program)) == NULL) {
@@ -932,7 +934,10 @@ bool linkTPprogs(const ebpfTelemetryObject *obj,
             // attach this to all active syscall enter tracepoints
             for (syscall=0; syscall<=SYSCALL_MAX; syscall++) {
                 if (activeSyscalls[syscall]) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
                     snprintf(tp, SYSCALL_NAME_LEN * 2, "sys_enter_%s", syscallNumToName[syscall].name);
+#pragma GCC diagnostic pop
                     unsigned int numArgs = syscallNumToName[syscall].numArgs;
                     s->link[syscall] = bpf_program__attach_tracepoint(s->prog[numArgs], "syscalls", tp);
                     if (libbpf_get_error(s->link[syscall]))
@@ -955,7 +960,10 @@ bool linkTPprogs(const ebpfTelemetryObject *obj,
             // attach this to all active syscall exit tracepoints
             for (syscall=0; syscall<=SYSCALL_MAX; syscall++) {
                 if (activeSyscalls[syscall]) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
                     snprintf(tp, SYSCALL_NAME_LEN * 2, "sys_exit_%s", syscallNumToName[syscall].name);
+#pragma GCC diagnostic pop
                     s->link[syscall] = bpf_program__attach_tracepoint(s->prog[0], "syscalls", tp);
                     if (libbpf_get_error(s->link[syscall]))
                         return false;

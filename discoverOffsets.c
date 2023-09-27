@@ -813,8 +813,18 @@ bool getCredsOffsets(Offsets *offsets, struct perf_buffer *pb)
 
     if (child == 0) {
         // set child process creds to known values and trigger EBPF program
-        setgid(TEMPGID);
-        setuid(TEMPUID);
+        if(setgid(TEMPGID) < 0)
+        {
+            fprintf(stderr, "Failed in call to setgid\n");
+            exit(1);
+        }
+
+        if(setuid(TEMPUID) < 0)
+        {
+            fprintf(stderr, "Failed in call to setuid\n");
+            exit(1);
+        }
+
         // create semaphore
         sem = sem_open(SEM_NAME, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 0);
         if (sem == SEM_FAILED) {
@@ -1397,12 +1407,20 @@ bool getAuidOffset(Offsets *offsets)
     // the session id is much more likely to be unique so search for that first
     fp = fopen(SESSIONID_FILE, "r");
     if (fp != NULL) {
-        fscanf(fp, "%d", &sessionId);
+        if(fscanf(fp, "%d", &sessionId) == EOF)
+        {
+            return false;
+        }
+
         fclose(fp);
 
         fp = fopen(LOGINUID_FILE, "r");
         if (fp != NULL) {
-            fscanf(fp, "%d", &loginId);
+            if(fscanf(fp, "%d", &loginId) == EOF)
+            {
+                return false;
+            }
+
             fclose(fp);
 
             // search forwards for the session ID
@@ -1880,8 +1898,18 @@ int discoverOffsets(
         snprintf(cwd, sizeof(cwd), "/tmp/");
     }
     mkdir(tmpdir, TEMPDIR_MODE);
-    chdir(tmpdir);
-    chown(tmpdir, TEMPUID, TEMPGID);
+    if(chdir(tmpdir) == -1 )
+    {
+        fprintf(stderr, "ERROR: Failed to change directories: %s\n", tmpdir);
+        return E_DISC_CATASTROPHIC;
+    }
+
+    if(chown(tmpdir, TEMPUID, TEMPGID) == -1)
+    {
+        fprintf(stderr, "ERROR: Failed to change ownership: %s\n", tmpdir);
+        return E_DISC_CATASTROPHIC;
+    }
+
     creation_time = time(NULL);
 
     // set up signal handler for PDEATH
@@ -1910,7 +1938,12 @@ int discoverOffsets(
 
     memDumpCloseAll();
 
-    chdir(cwd);
+    if(chdir(cwd) == -1)
+    {
+        fprintf(stderr, "ERROR: Failed to change directories: %s\n", cwd);
+        return E_DISC_CATASTROPHIC;
+    }
+
     rmdir(tmpdir);
 
     return ret;
